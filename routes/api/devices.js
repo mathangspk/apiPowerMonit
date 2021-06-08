@@ -54,7 +54,9 @@ router.get('/search', verify, async (req, res) => {
     //let limit = 20;
     let skip = Number(req.query.skip)
     let paramsQuery = {
-        userId: { '$regex': req.query.userId || '' }
+        userId: { '$regex': req.query.userId || '' },
+        sn: { '$regex': req.query.sn || '' }
+
     }
     if (req.query.userId) {
         paramsQuery.userId = { '$in': req.query.userId.split(',') }
