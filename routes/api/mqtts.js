@@ -52,10 +52,29 @@ router.get('/search', verify, async (req, res) => {
     console.log(req.query)
     let limit = Number(req.query.limit)
     //let limit = 20;
+    let paramsQuery;
     let skip = Number(req.query.skip)
-    let paramsQuery = {
-        topic: { '$regex': req.query.topic || '' }
+    if (req.query.from && req.query.to) {
+        let from = new Date(req.query.from)
+        let to = new Date(req.query.to)
+        console.log(from)
+        console.log(to)
+        paramsQuery = {
+            topic: { '$regex': req.query.topic || '' },
+            time:{
+                $gte: from,
+                $lte: to
+            }
+    
+        }
+    } else {
+        paramsQuery = {
+            topic: { '$regex': req.query.topic || '' },
+    
+        }
     }
+   
+   
     if (req.query.userId) {
         paramsQuery.userId = { '$in': req.query.userId.split(',') }
     }

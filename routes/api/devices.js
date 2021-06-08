@@ -8,6 +8,7 @@ const Tool = require('../../models/Tool');
 const TOKEN_SECRET = require('../../config/secretToken').secretToken;
 const jwt = require('jsonwebtoken');
 const { concat } = require('joi');
+const { _isIsoDate } = require('joi/lib/types/date');
 //@route GeT api/devices
 //@desc Get all devices
 //@access Public
@@ -53,10 +54,11 @@ router.get('/search', verify, async (req, res) => {
     let limit = Number(req.query.limit)
     //let limit = 20;
     let skip = Number(req.query.skip)
+   
     let paramsQuery = {
         userId: { '$regex': req.query.userId || '' },
-        sn: { '$regex': req.query.sn || '' }
-
+        sn: { '$regex': req.query.sn || '' },
+        
     }
     if (req.query.userId) {
         paramsQuery.userId = { '$in': req.query.userId.split(',') }
