@@ -50,6 +50,7 @@ router.get('/search', verify, async (req, res) => {
     let token = req.headers['auth-token']
     //console.log(jwt.verify(token, TOKEN_SECRET))
     console.log(req.query)
+    var analysicPower =[]
     let limit = Number(req.query.limit)
     //let limit = 20;
     let paramsQuery;
@@ -61,20 +62,54 @@ router.get('/search', verify, async (req, res) => {
         console.log(to)
         paramsQuery = {
             topic: { '$regex': req.query.topic || '' },
-            time:{
+            date: {
                 $gte: from,
                 $lte: to
             }
-    
+
         }
+        analysicPower = await mqtt
+            .aggregate(
+                [
+                    {
+                        $match: {
+                            topic: req.query.topic,
+                            date: {
+                                $gte: from,
+                                $lte: to
+                            }
+                        }
+
+                    },
+                    {
+                        $group:
+                        {
+                            _id: "$topic",
+                            maxPower: { $max: "$power" },
+                            minPower: { $min: "$power" },
+                            maxVolt: { $max: "$volt" },
+                            minVolt: { $min: "$volt" },
+                            maxCurrent: { $max: "$current" },
+                            minCurrent: { $min: "$current" },
+                            maxEnergy: { $max: "$energy" },
+                            minEnergy: { $min: "$energy" },
+                            //total: {$subtract: [ "$maxEnergy", "$minEnergy" ]}
+                        }
+                    },
+                    {
+                        $addFields: {
+                            totalEnergy: { $subtract: ["$maxEnergy", "$minEnergy"] }
+                        }
+                    }
+                ]
+            )
+        console.log(analysicPower)
     } else {
         paramsQuery = {
             topic: { '$regex': req.query.topic || '' },
-    
+
         }
     }
-   
-   
     if (req.query.userId) {
         paramsQuery.userId = { '$in': req.query.userId.split(',') }
     }
@@ -83,15 +118,20 @@ router.get('/search', verify, async (req, res) => {
         .countDocuments({}, (err, count) => {
             return count;
         });
+
+        console.log('analysicPower:', analysicPower)
+
     await mqtt.find(paramsQuery)
         .skip(skip).limit(limit)
         .sort({ date: 1 })
-        .then(mqtts => res.status(200).json(
-            {
-                Data: { Row: mqtts, Total: countmqtt },
-                Status: { StatusCode: 200, Message: 'OK' }
-            }
-        ));
+        .then(mqtts =>
+            res.status(200).json(
+                {
+                    Data: { Row: mqtts, Total: countmqtt, analysic:analysicPower },
+                    Status: { StatusCode: 200, Message: 'OK' }
+                }
+            )
+        );
 });
 //@route Get api/mqtt/collect-tools
 //@desc Get all api/mqtt/collect-tools
