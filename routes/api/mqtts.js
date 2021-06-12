@@ -50,11 +50,12 @@ router.get('/search', verify, async (req, res) => {
     let token = req.headers['auth-token']
     //console.log(jwt.verify(token, TOKEN_SECRET))
     console.log(req.query)
-    var analysicPower =[]
-    let limit = Number(req.query.limit)
-    //let limit = 20;
+    var analysicPower = []
+    //let limit = Number(req.query.limit)
+    let limit = 20;
     let paramsQuery;
-    let skip = Number(req.query.skip)
+    //let skip = Number(req.query.skip)
+    let skip = 20
     if (req.query.from && req.query.to) {
         let from = new Date(req.query.from)
         let to = new Date(req.query.to)
@@ -104,6 +105,44 @@ router.get('/search', verify, async (req, res) => {
                 ]
             )
         console.log(analysicPower)
+        await mqtt.aggregate([
+            {
+                $match: {
+                    topic: req.query.topic,
+                    date: {
+                        $gte: from,
+                        $lte: to
+                    }
+                }
+
+            },
+            {
+                $group: {
+                    "_id": {
+                        "$toDate": {
+                            "$subtract": [
+                                { "$toLong": "$date" },
+                                { "$mod": [{ "$toLong": "$date" }, 1000 * 60 * 5] }
+                            ]
+                        },
+
+                    },
+                    "power": { $max: "$power" },
+                    "volt": { $first: "$volt" },
+                    "curr": { $first: "$current" },
+                    "fre": { $first: "$frequency" },
+                    "count": { "$sum": 1 }
+                }
+            }
+        ]).sort({ _id: 1 })
+            .then(interval =>
+                res.status(200).json(
+                    {
+                        Data: { Row: interval, Total: interval.length, analysic: analysicPower[0] },
+                        Status: { StatusCode: 200, Message: 'OK' }
+                    }
+                )
+            );
     } else {
         paramsQuery = {
             topic: { '$regex': req.query.topic || '' },
@@ -119,19 +158,19 @@ router.get('/search', verify, async (req, res) => {
             return count;
         });
 
-        console.log('analysicPower:', analysicPower)
+    console.log('analysicPower:', analysicPower[0])
 
-    await mqtt.find(paramsQuery)
-        .skip(skip).limit(limit)
-        .sort({ date: 1 })
-        .then(mqtts =>
-            res.status(200).json(
-                {
-                    Data: { Row: mqtts, Total: countmqtt, analysic:analysicPower },
-                    Status: { StatusCode: 200, Message: 'OK' }
-                }
-            )
-        );
+    // await mqtt.find(paramsQuery)
+    //     .skip(skip).limit(limit)
+    //     .sort({ date: 1 })
+    //     .then(mqtts =>
+    //         res.status(200).json(
+    //             {
+    //                 Data: { Row: mqtts, Total: countmqtt, analysic: analysicPower[0] },
+    //                 Status: { StatusCode: 200, Message: 'OK' }
+    //             }
+    //         )
+    //     );
 });
 //@route Get api/mqtt/collect-tools
 //@desc Get all api/mqtt/collect-tools
