@@ -59,6 +59,7 @@ router.get('/search', verify, async (req, res) => {
     if (req.query.from && req.query.to) {
         let from = new Date(req.query.from)
         let to = new Date(req.query.to)
+        let duration = req.query.duration
         console.log(from)
         console.log(to)
         paramsQuery = {
@@ -105,6 +106,75 @@ router.get('/search', verify, async (req, res) => {
                 ]
             )
         console.log(analysicPower)
+        const countInterval = await mqtt.aggregate([
+            {
+                $match: {
+                    topic: req.query.topic,
+                    date: {
+                        $gte: from,
+                        $lte: to
+                    }
+                }
+
+            },
+            {
+                $group: {
+                    "_id": null,
+                    count: { "$sum": 1 }
+                }
+            }
+        ])
+        console.log(countInterval)
+        const percent = await mqtt.aggregate([
+            {
+                $match: {
+                    topic: req.query.topic,
+                    date: {
+                        $gte: from,
+                        $lte: to
+                    },
+                    power:{$gte:1000}
+                }
+
+            },
+            {
+                $group: {
+                    "_id": null,
+                    count: { "$sum": 1 }
+                }
+            }
+        ])
+        console.log(percent)
+        // const percent = await mqtt.aggregate([
+        //     {
+        //         $match: {
+        //             topic: req.query.topic,
+        //             date: {
+        //                 $gte: from,
+        //                 $lte: to
+        //             },
+        //         }
+
+        //     },
+        //     {
+        //         $group: {
+        //             "_id": {
+        //                 "$toDate": {
+        //                     "$subtract": [
+        //                         { "$toLong": "$date" },
+        //                         { "$mod": [{ "$toLong": "$date" }, 1000 * 60 * Number(duration)] }
+        //                     ]
+        //                 },
+
+        //             },
+        //             power:{"$gte":1000},
+        //             "count": { "$sum": 1 }
+        //         }
+        //     }
+        // ])
+        // console.log(percent)
+        //console.log(percent.length)
+        //console.log(percent.length/countInterval.length*100)
         await mqtt.aggregate([
             {
                 $match: {
@@ -122,7 +192,7 @@ router.get('/search', verify, async (req, res) => {
                         "$toDate": {
                             "$subtract": [
                                 { "$toLong": "$date" },
-                                { "$mod": [{ "$toLong": "$date" }, 1000 * 60 * 5] }
+                                { "$mod": [{ "$toLong": "$date" }, 1000 * 60 * Number(duration)] }
                             ]
                         },
 
@@ -143,6 +213,7 @@ router.get('/search', verify, async (req, res) => {
                     }
                 )
             );
+
     } else {
         paramsQuery = {
             topic: { '$regex': req.query.topic || '' },
