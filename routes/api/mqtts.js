@@ -55,11 +55,15 @@ router.get('/search', verify, async (req, res) => {
     let limit = 20;
     let paramsQuery;
     //let skip = Number(req.query.skip)
+    let duration = req.query.duration
+    if (!duration) {
+        duration = 5;
+    }
     let skip = 20
-    if (req.query.from && req.query.to) {
+    if (req.query.from && req.query.to && duration) {
         let from = new Date(req.query.from)
         let to = new Date(req.query.to)
-        let duration = req.query.duration
+
         console.log(from)
         console.log(to)
         paramsQuery = {
@@ -106,7 +110,7 @@ router.get('/search', verify, async (req, res) => {
                 ]
             )
         console.log(analysicPower)
-        const countInterval = await mqtt.aggregate([
+        const countSampleInterval = await mqtt.aggregate([
             {
                 $match: {
                     topic: req.query.topic,
@@ -124,8 +128,10 @@ router.get('/search', verify, async (req, res) => {
                 }
             }
         ])
-        console.log(countInterval)
-        const percent = await mqtt.aggregate([
+        if (countSampleInterval[0]) {
+            console.log(countSampleInterval[0].count)
+        }
+        const countSamplePowerGreater = await mqtt.aggregate([
             {
                 $match: {
                     topic: req.query.topic,
@@ -133,7 +139,7 @@ router.get('/search', verify, async (req, res) => {
                         $gte: from,
                         $lte: to
                     },
-                    power:{$gte:1000}
+                    power: { $gte: 1000 }
                 }
 
             },
@@ -144,37 +150,8 @@ router.get('/search', verify, async (req, res) => {
                 }
             }
         ])
-        console.log(percent)
-        // const percent = await mqtt.aggregate([
-        //     {
-        //         $match: {
-        //             topic: req.query.topic,
-        //             date: {
-        //                 $gte: from,
-        //                 $lte: to
-        //             },
-        //         }
+        if (countSamplePowerGreater[0]) { console.log(countSamplePowerGreater[0].count) }
 
-        //     },
-        //     {
-        //         $group: {
-        //             "_id": {
-        //                 "$toDate": {
-        //                     "$subtract": [
-        //                         { "$toLong": "$date" },
-        //                         { "$mod": [{ "$toLong": "$date" }, 1000 * 60 * Number(duration)] }
-        //                     ]
-        //                 },
-
-        //             },
-        //             power:{"$gte":1000},
-        //             "count": { "$sum": 1 }
-        //         }
-        //     }
-        // ])
-        // console.log(percent)
-        //console.log(percent.length)
-        //console.log(percent.length/countInterval.length*100)
         await mqtt.aggregate([
             {
                 $match: {
@@ -215,34 +192,232 @@ router.get('/search', verify, async (req, res) => {
             );
 
     } else {
-        paramsQuery = {
-            topic: { '$regex': req.query.topic || '' },
-
-        }
+        res.status(200).json(
+            {
+                Data: { Row: [], Total: 0, analysic: {} },
+                Status: { StatusCode: 200, Message: 'OK' }
+            }
+        )
     }
-    if (req.query.userId) {
-        paramsQuery.userId = { '$in': req.query.userId.split(',') }
-    }
-
-    var countmqtt = await mqtt.find(paramsQuery)
-        .countDocuments({}, (err, count) => {
-            return count;
-        });
-
-    console.log('analysicPower:', analysicPower[0])
-
-    // await mqtt.find(paramsQuery)
-    //     .skip(skip).limit(limit)
-    //     .sort({ date: 1 })
-    //     .then(mqtts =>
-    //         res.status(200).json(
-    //             {
-    //                 Data: { Row: mqtts, Total: countmqtt, analysic: analysicPower[0] },
-    //                 Status: { StatusCode: 200, Message: 'OK' }
-    //             }
-    //         )
-    //     );
 });
+router.get('/powerdaily', verify, async (req, res) => {
+    let token = req.headers['auth-token']
+    //console.log(jwt.verify(token, TOKEN_SECRET))
+    console.log(req.query)
+    var powerDailyArray = [];
+    var dateArray = [];
+    var resultPowerArray = [];
+    //let limit = Number(req.query.limit)
+    let limit = 20;
+    let paramsQuery;
+    //let skip = Number(req.query.skip)
+    let duration = Number(req.query.duration)
+    if (!duration) {
+        duration = 7;
+    }
+    let sampleNewest = await mqtt.find().sort({ 'date': -1 }).limit(1)
+    console.log(sampleNewest)
+    let skip = 20
+    if (req.query.from && req.query.to && duration) {
+        let from = new Date(req.query.from)
+        let to = new Date(req.query.to)
+        console.log(from)
+        let toOneDay = new Date(req.query.from)
+        toOneDay.setDate(toOneDay.getDate() + 1);
+        console.log(duration)
+        for (let i = 0; i <= duration; i++) {
+
+            from.setDate(from.getDate() + i);
+            if (i === duration) {
+                toOneDay = new Date()
+            } else {
+                toOneDay.setDate(toOneDay.getDate() + i);
+            }
+            console.log("From: ", from);
+            console.log("To: ", toOneDay);
+            //element.date = toOneDay;
+            //element.value = await getpower(req.query.topic, from, toOneDay);
+            //powerDailyArray[i] = element;
+            dateArray.push(toOneDay);
+            powerDailyArray.push(await getpower(req.query.topic, from, toOneDay))
+            from = new Date(req.query.from);
+            toOneDay = new Date(req.query.from)
+            toOneDay.setDate(toOneDay.getDate() + 1);
+        }
+        console.log(dateArray)
+        console.log(powerDailyArray)
+        for (let i = 0; i < dateArray.length; i++) {
+            resultPowerArray[i] = {
+                date: dateArray[i],
+                value: powerDailyArray[i]
+            }
+        }
+        //console.log(resultPowerArray)
+        res.status(200).json(
+            {
+                Data: { Row: resultPowerArray },
+                Status: { StatusCode: 200, Message: 'OK' }
+            }
+        )
+        // analysicPower = await mqtt
+        //     .aggregate(
+        //         [
+        //             {
+        //                 $match: {
+        //                     topic: req.query.topic,
+        //                     date: {
+        //                         $gte: from,
+        //                         $lte: to
+        //                     }
+        //                 }
+
+        //             },
+        //             {
+        //                 $group:
+        //                 {
+        //                     _id: "$topic",
+        //                     maxPower: { $max: "$power" },
+        //                     minPower: { $min: "$power" },
+        //                     maxVolt: { $max: "$volt" },
+        //                     minVolt: { $min: "$volt" },
+        //                     maxCurrent: { $max: "$current" },
+        //                     minCurrent: { $min: "$current" },
+        //                     maxEnergy: { $max: "$energy" },
+        //                     minEnergy: { $min: "$energy" },
+        //                     //total: {$subtract: [ "$maxEnergy", "$minEnergy" ]}
+        //                 }
+        //             },
+        //             {
+        //                 $addFields: {
+        //                     totalEnergy: { $subtract: ["$maxEnergy", "$minEnergy"] }
+        //                 }
+        //             }
+        //         ]
+        //     )
+        //console.log(analysicPower)
+        const countSampleInterval = await mqtt.aggregate([
+            {
+                $match: {
+                    topic: req.query.topic,
+                    date: {
+                        $gte: from,
+                        $lte: to
+                    }
+                }
+
+            },
+            {
+                $group: {
+                    "_id": null,
+                    count: { "$sum": 1 }
+                }
+            }
+        ])
+        if (countSampleInterval[0]) {
+            console.log(countSampleInterval[0].count)
+        }
+        const countSamplePowerGreater = await mqtt.aggregate([
+            {
+                $match: {
+                    topic: req.query.topic,
+                    date: {
+                        $gte: from,
+                        $lte: to
+                    },
+                    power: { $gte: 1000 }
+                }
+
+            },
+            {
+                $group: {
+                    "_id": null,
+                    count: { "$sum": 1 }
+                }
+            }
+        ])
+        if (countSamplePowerGreater[0]) { console.log(countSamplePowerGreater[0].count) }
+
+        await mqtt.aggregate([
+            {
+                $match: {
+                    topic: req.query.topic,
+                    date: {
+                        $gte: from,
+                        $lte: to
+                    }
+                }
+
+            },
+            {
+                $group: {
+                    "_id": {
+                        "$toDate": {
+                            "$subtract": [
+                                { "$toLong": "$date" },
+                                { "$mod": [{ "$toLong": "$date" }, 1000 * 60 * Number(duration)] }
+                            ]
+                        },
+
+                    },
+                    "power": { $max: "$power" },
+                    "volt": { $first: "$volt" },
+                    "curr": { $first: "$current" },
+                    "fre": { $first: "$frequency" },
+                    "count": { "$sum": 1 }
+                }
+            }
+        ]).sort({ _id: 1 })
+        // .then(interval =>
+        //     res.status(200).json(
+        //         {
+        //             Data: { Row: interval, Total: interval.length, analysic: analysicPower[0] },
+        //             Status: { StatusCode: 200, Message: 'OK' }
+        //         }
+        //     )
+        // );
+
+    } else {
+        res.status(200).json(
+            {
+                Data: { Row: [], Total: 0, analysic: {} },
+                Status: { StatusCode: 200, Message: 'OK' }
+            }
+        )
+    }
+});
+
+getpower = async (topic, from, to) => {
+    let Power = await mqtt
+        .aggregate(
+            [
+                {
+                    $match: {
+                        topic,
+                        date: {
+                            $gte: from,
+                            $lte: to
+                        }
+                    }
+
+                },
+                {
+                    $group:
+                    {
+                        _id: "$topic",
+                        maxEnergy: { $max: "$energy" },
+                        minEnergy: { $min: "$energy" },
+                    }
+                },
+                {
+                    $addFields: {
+                        totalEnergy: { $subtract: ["$maxEnergy", "$minEnergy"] }
+                    }
+                }
+            ]
+        )
+    return Power[0];
+}
+
 //@route Get api/mqtt/collect-tools
 //@desc Get all api/mqtt/collect-tools
 router.get('/collect-tools', verify, (req, res) => {
