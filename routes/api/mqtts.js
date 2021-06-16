@@ -385,6 +385,92 @@ router.get('/powerdaily', verify, async (req, res) => {
         )
     }
 });
+router.get('/searchpowerdata', verify, async (req, res) => {
+    let token = req.headers['auth-token']
+    //console.log(jwt.verify(token, TOKEN_SECRET))
+    console.log(req.query)
+    var powerDailyArray = [];
+    var dateArray = [];
+    var resultPowerArray = [];
+    var element = {};
+    //let limit = Number(req.query.limit)
+    let limit = 20;
+    let paramsQuery;
+    //let skip = Number(req.query.skip)
+    let duration = Number(req.query.duration)
+    if (!duration) {
+        duration = 10;
+    }
+    let sampleNewest = await mqtt.find().sort({ 'date': -1 }).limit(1)
+    if (req.query.search_date_from && req.query.search_date_to && req.query.search_time_from && req.query.search_time_to && duration) {
+        let searchDateFrom = new Date(req.query.search_date_from);
+        let searchDateTo = new Date(req.query.search_date_to);
+
+        let searchTimeFrom = req.query.search_time_from;
+        let hourSearchTimeFrom = searchTimeFrom.split(":")[0]
+        let minSearchTimeFrom = searchTimeFrom.split(":")[1]
+        let searchTimeTo = req.query.search_time_to;
+        let hourSearchTimeTo = searchTimeTo.split(":")[0]
+        let minSearchTimeTo = searchTimeTo.split(":")[1]
+
+        searchDateFrom.setHours(hourSearchTimeFrom, minSearchTimeFrom);
+        searchDateTo.setHours(hourSearchTimeTo, minSearchTimeTo);
+
+        // console.log(searchDateFrom)
+        // console.log(searchDateTo)
+        //console.log(sampleNewest)
+        let dateFrom = searchDateFrom.getDate()
+        let dateTo = searchDateTo.getDate()
+        let j = 0;
+        for (let i = dateFrom; i <= dateTo; i++) {
+
+            let searchDateFromm = searchDateFrom.setDate(searchDateFrom.getDate() + j);
+            let fromAnalysic = new Date(searchDateFromm);
+            console.log("From:", fromAnalysic)
+            element.from = fromAnalysic;
+            dateArray[j] = {
+                ...element,
+                from: new Date(searchDateFromm)
+            }
+            let searchDateToo = searchDateFrom.setHours(hourSearchTimeTo, minSearchTimeTo)
+            let toAnalysic = new Date(searchDateToo);
+            console.log("To:", toAnalysic)
+            element.to = toAnalysic
+            dateArray[j] = {
+                ...element,
+                to: element.to
+            }
+            searchDateFrom = new Date(req.query.search_date_from);
+            searchDateFrom.setHours(hourSearchTimeFrom, minSearchTimeFrom)
+            j++;
+        }
+        console.log(dateArray)
+
+        for (let i = 0; i < dateArray.length; i++) {
+            let value = await getPowerLongArchie(req.query.topic, dateArray[i].from, dateArray[i].to, duration);
+            element.value = value;
+            dateArray[i] = {
+                ...element,
+                value: element.value
+            }
+        }
+        console.log(dateArray)
+        res.status(200).json(
+            {
+                Data: { Row: dateArray },
+                Status: { StatusCode: 200, Message: 'OK' }
+            }
+        )
+    }
+    else {
+        res.status(200).json(
+            {
+                Data: { Row: [], Total: 0, analysic: {} },
+                Status: { StatusCode: 200, Message: 'OK' }
+            }
+        )
+    }
+});
 
 getpower = async (topic, from, to) => {
     let Power = await mqtt
@@ -417,7 +503,44 @@ getpower = async (topic, from, to) => {
         )
     return Power[0];
 }
+getPowerLongArchie = async (topic, from, to, duration) => {
+    console.log(topic);
+    console.log(from);
+    console.log(to);
+    console.log(duration);
+    let power = await mqtt.aggregate([
+        {
+            $match: {
+                topic: topic,
+                date: {
+                    $gte: from,
+                    $lte: to
+                }
+            }
 
+        },
+        {
+            $group: {
+                "_id": {
+                    "$toDate": {
+                        "$subtract": [
+                            { "$toLong": "$date" },
+                            { "$mod": [{ "$toLong": "$date" }, 1000 * 60 * Number(duration)] }
+                        ]
+                    },
+
+                },
+                "power": { $max: "$power" },
+                "volt": { $first: "$volt" },
+                "curr": { $first: "$current" },
+                "fre": { $first: "$frequency" },
+                "count": { "$sum": 1 }
+            }
+        }
+    ]).sort({ _id: 1 })
+
+    return power;
+}
 //@route Get api/mqtt/collect-tools
 //@desc Get all api/mqtt/collect-tools
 router.get('/collect-tools', verify, (req, res) => {
