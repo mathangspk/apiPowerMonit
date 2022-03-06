@@ -50,6 +50,7 @@ router.get('/search', verify, async (req, res) => {
     let token = req.headers['auth-token']
     //console.log(jwt.verify(token, TOKEN_SECRET))
     console.log(req.query)
+    console.log("search thuong");
     var analysicPower = []
     //let limit = Number(req.query.limit)
     let limit = 20;
@@ -388,6 +389,7 @@ router.get('/powerdaily', verify, async (req, res) => {
 router.get('/searchpowerdata', verify, async (req, res) => {
     let token = req.headers['auth-token']
     //console.log(jwt.verify(token, TOKEN_SECRET))
+    console.log("search chi tiet");
     console.log(req.query)
     var powerDailyArray = [];
     var dateArray = [];
