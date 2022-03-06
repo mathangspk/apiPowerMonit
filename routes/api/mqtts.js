@@ -50,7 +50,6 @@ router.get('/search', verify, async (req, res) => {
     let token = req.headers['auth-token']
     //console.log(jwt.verify(token, TOKEN_SECRET))
     console.log(req.query)
-    console.log("search thuong");
     var analysicPower = []
     //let limit = Number(req.query.limit)
     let limit = 20;
@@ -62,9 +61,15 @@ router.get('/search', verify, async (req, res) => {
     }
     let skip = 20
     if (req.query.from && req.query.to && duration) {
-        let from = new Date(req.query.from)
-        let to = new Date(req.query.to)
+        //---for test Time from laptop Warning Time zone--//
 
+        // let from = new Date(req.query.from)
+        // let to = new Date(req.query.to)
+        var from = new Date(req.query.from)
+        var to = new Date(req.query.to)
+        //--modify for mongodb save on VPS other time zone vietnam--//
+        from.setHours(from.getHours() - 7)
+        to.setHours(to.getHours() - 7)
         console.log(from)
         console.log(to)
         paramsQuery = {
@@ -389,7 +394,6 @@ router.get('/powerdaily', verify, async (req, res) => {
 router.get('/searchpowerdata', verify, async (req, res) => {
     let token = req.headers['auth-token']
     //console.log(jwt.verify(token, TOKEN_SECRET))
-    console.log("search chi tiet");
     console.log(req.query)
     var powerDailyArray = [];
     var dateArray = [];
